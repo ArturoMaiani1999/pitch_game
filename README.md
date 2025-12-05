@@ -47,7 +47,7 @@ Close the plot window or press Ctrl+C to stop.
 ## Next steps / roadmap
 
 1. **Improve performance and parallelism**
-   Pitch detection (YIN) and rendering should run independently so neither blocks the other. The goal is smoother visuals and lower latency.
+   Pitch detection (YIN) and rendering should run independently so neither blocks the other. The goal is smoother visuals and lower latency. As you can see by running the `unit_est/python_yin.py`, the pitch tracking is super fast, because no rendering is present.
 
 2. **Upgrade melody generation**
    Current melodies are semi-random. We want a more musical generator: coherent phrases, controlled contour, sensible pauses, and style presets.
@@ -55,6 +55,4 @@ Close the plot window or press Ctrl+C to stop.
 3. **Add a harmonizer / playback mode**
    After a level, replay the user’s sung melody on top of a pleasant accompaniment (e.g., piano or orchestral pad) so players can *hear* their performance musically, and be surprised by their own voice.
 
-```
-::contentReference[oaicite:0]{index=0}
-```
+

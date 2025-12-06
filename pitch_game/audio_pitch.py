@@ -1,11 +1,12 @@
-
-
 # audio_pitch.py
 import numpy as np
 import sounddevice as sd
 import aubio
 import threading
 import queue
+import time
+from collections import deque
+
 from config import SR, HOP_SIZE, WIN_SIZE, PITCH_METHOD, SILENCE_DB, TOLERANCE, CONF_THRESH
 
 class PitchStream:
@@ -16,13 +17,20 @@ class PitchStream:
         self.pitch_o.set_silence(SILENCE_DB)
         self.pitch_o.set_tolerance(TOLERANCE)
 
-        # thread-safe latest pitch
+        # hop queue from audio callback -> worker
+        self._hop_q = queue.Queue(maxsize=12)
+
+        # pitch results buffer from worker -> main
+        # stores tuples (timestamp, hz)
+        self._pitch_buf = deque()
+        self._buf_lock = threading.Lock()
+
+        # latest pitch (still handy)
         self._latest_hz = np.nan
         self._latest_conf = 0.0
-        self._lock = threading.Lock()
+        self._latest_t = 0.0
+        self._latest_lock = threading.Lock()
 
-        # hop queue from audio -> worker
-        self._q = queue.Queue(maxsize=8)  # small to avoid latency buildup
         self._stop = threading.Event()
         self._worker = None
         self._stream = None
@@ -30,47 +38,69 @@ class PitchStream:
     # ---------- public properties ----------
     @property
     def latest_hz(self):
-        with self._lock:
+        with self._latest_lock:
             return float(self._latest_hz)
 
     @property
     def latest_conf(self):
-        with self._lock:
+        with self._latest_lock:
             return float(self._latest_conf)
+
+    @property
+    def latest_t(self):
+        with self._latest_lock:
+            return float(self._latest_t)
+
+    # ---------- pull all new pitch samples ----------
+    def pop_all_pitches(self):
+        """
+        Returns a list of (t, hz) for all pitch samples since last call.
+        Thread-safe. Main thread should call this every frame.
+        """
+        with self._buf_lock:
+            out = list(self._pitch_buf)
+            self._pitch_buf.clear()
+        return out
 
     # ---------- audio callback ----------
     def _callback(self, indata, frames, time_info, status):
         if status:
-            # don't print too much in RT thread
-            pass
+            pass  # keep RT thread quiet
 
-        hop = indata[:, 0].copy()  # copy so buffer isn't reused
+        hop = indata[:, 0].copy()
         try:
-            self._q.put_nowait(hop)
+            self._hop_q.put_nowait(hop)
         except queue.Full:
-            # drop hop if worker is behind (keeps latency bounded)
+            # drop hop if worker behind -> bounded latency
             pass
 
     # ---------- pitch worker thread ----------
     def _worker_loop(self):
         while not self._stop.is_set():
             try:
-                hop = self._q.get(timeout=0.1)
+                hop = self._hop_q.get(timeout=0.1)
             except queue.Empty:
                 continue
 
             hop = hop.astype(np.float32)
             f0 = float(self.pitch_o(hop)[0])
             conf = float(self.pitch_o.get_confidence())
+            t_now = time.time()
 
             if conf >= CONF_THRESH and 20.0 < f0 < 2000.0:
-                with self._lock:
-                    self._latest_hz = f0
-                    self._latest_conf = conf
+                hz_val = f0
             else:
-                with self._lock:
-                    self._latest_hz = np.nan
-                    self._latest_conf = conf
+                hz_val = np.nan
+
+            # store in rolling buffer for plotting
+            with self._buf_lock:
+                self._pitch_buf.append((t_now, hz_val))
+
+            # also update latest
+            with self._latest_lock:
+                self._latest_hz = hz_val
+                self._latest_conf = conf
+                self._latest_t = t_now
 
     # ---------- context manager ----------
     def open_stream(self):
@@ -82,6 +112,7 @@ class PitchStream:
             def __enter__(_self):
                 ps = _self.ps
                 ps._stop.clear()
+
                 ps._worker = threading.Thread(target=ps._worker_loop, daemon=True)
                 ps._worker.start()
 

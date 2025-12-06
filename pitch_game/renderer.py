@@ -10,9 +10,6 @@ from config import (
     LOOKAHEAD_SECONDS, DY_SEMITONES
 )
 
-# -----------------------------------
-# Interval naming helper (semitones)
-# -----------------------------------
 INTERVAL_NAMES = {
     1: "semitone",
     2: "tone",
@@ -42,20 +39,16 @@ class GameRenderer:
         self.dy_semitones = dy_semitones
         self.window_seconds = WINDOW_SECONDS
 
-        # full stored targets (Hz + MIDI)
         self.map_im = None
         self._t_target_full = None
         self._hz_target_full = None
-        self._midi_target_full = None          # raw MIDI (possibly fractional)
-        self._midi_target_q_full = None        # quantized MIDI (integers for display)
+        self._midi_target_full = None
+        self._midi_target_q_full = None
         self._rgba_full = None
         self._y_bins_midi = None
 
         self._setup_axes()
 
-    # ----------------------------
-    # Axes setup (LINEAR MIDI AXIS)
-    # ----------------------------
     def _setup_axes(self):
         midi_min = float(hz_to_midi(self.fmin_plot_hz))
         midi_max = float(hz_to_midi(self.fmax_plot_hz))
@@ -66,10 +59,8 @@ class GameRenderer:
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
 
-        # user line in MIDI
         (self.line_user,) = self.ax.plot([], [], lw=2, label="You", zorder=3)
 
-        # TARGET line as STEPS (no interpolation visually)
         (self.line_target,) = self.ax.plot(
             [], [], lw=2, alpha=0.9, label="Target",
             drawstyle="steps-post", zorder=2
@@ -88,31 +79,29 @@ class GameRenderer:
 
         self.score_text = self.ax.text(0.02, 0.95, "", transform=self.ax.transAxes, va="top")
 
-        # right-side note labels
         self.ax_right = self.ax.twinx()
         self.ax_right.set_ylim(self.ax.get_ylim())
         self.ax_right.set_yticks(midi_ticks)
         self.ax_right.set_yticklabels(tick_labels)
         self.ax_right.set_ylabel("Pitch (notes)")
 
-        # forecast dot (green for note)
         self.forecast_dot, = self.ax.plot(
             [0], [np.nan], marker="o", markersize=10, linestyle="None",
             color="green", alpha=0.9, label="_nolegend_", zorder=4
         )
 
-        # large red pause rectangle at right (hidden by default)
+        # pause rectangle (create once, toggle visibility only)
         self.pause_rect_width = 0.18
         self.pause_rect = self.ax.axvspan(
             -self.pause_rect_width, 0, color="red", alpha=0.18, zorder=1
         )
         self.pause_rect.set_visible(False)
 
-        # forecast label bottom-left
         self.forecast_label = self.ax.text(
-            0.02, 0.05, "", transform=self.ax.transAxes,
-            ha="left", va="bottom"
-        )
+                0.98, 0.05, "", transform=self.ax.transAxes,
+                ha="right", va="bottom"
+            )
+
 
     def _sync_right_axis(self):
         y0, y1 = self.ax.get_ylim()
@@ -126,9 +115,6 @@ class GameRenderer:
         self.ax_right.set_yticks(midi_ticks)
         self.ax_right.set_yticklabels(tick_labels)
 
-    # ----------------------------
-    # Background map creation (MIDI grid)
-    # ----------------------------
     def make_map_rgba_midi(self, t_target, midi_target_q):
         midi_min = float(hz_to_midi(self.fmin_plot_hz))
         midi_max = float(hz_to_midi(self.fmax_plot_hz))
@@ -140,9 +126,11 @@ class GameRenderer:
         Y = len(y_bins_midi)
         rgba = np.zeros((Y, T, 4), dtype=np.float32)
 
+        # blue everywhere
         rgba[..., 2] = 1.0
         rgba[..., 3] = ALPHA_BLUE
 
+        # green lane
         for k in range(T):
             m = midi_target_q[k]
             if not np.isfinite(m):
@@ -159,10 +147,7 @@ class GameRenderer:
         self._t_target_full = t_target
         self._hz_target_full = hz_target
 
-        # raw MIDI (may contain fractional values if hz_target ramps)
         self._midi_target_full = hz_to_midi(hz_target)
-
-        # QUANTIZED MIDI for display and map
         self._midi_target_q_full = np.where(
             np.isfinite(self._midi_target_full),
             np.round(self._midi_target_full),
@@ -176,9 +161,7 @@ class GameRenderer:
             self.ax.set_ylim(m_lo - pad, m_hi + pad)
             self._sync_right_axis()
 
-        self._rgba_full = self.make_map_rgba_midi(
-            t_target, self._midi_target_q_full
-        )
+        self._rgba_full = self.make_map_rgba_midi(t_target, self._midi_target_q_full)
 
         self.map_im = self.ax.imshow(
             self._rgba_full[:, :1, :],
@@ -188,9 +171,9 @@ class GameRenderer:
             zorder=0
         )
 
-    # ----------------------------
-    # Forecast helpers (note OR rest)
-    # ----------------------------
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
     def _next_target_any(self, k_start, midi_target_q):
         if k_start >= len(midi_target_q):
             return None, np.nan
@@ -207,17 +190,13 @@ class GameRenderer:
         for k in range(k_now, -1, -1):
             if np.isfinite(self._midi_target_q_full[k]):
                 return self._midi_target_q_full[k]
-
         return np.nan
 
-    # ----------------------------
-    # Frame update
-    # ----------------------------
     def update(self, now, user_times, user_pitches_hz, t_target, hz_target, latest_pitch_hz):
         if len(user_times) < 2:
             return
 
-        # user hz -> midi (keep fractional for accuracy feedback)
+        # user line
         p_arr_hz = np.array(user_pitches_hz)
         p_arr_midi = hz_to_midi(p_arr_hz)
 
@@ -225,7 +204,7 @@ class GameRenderer:
         t_rel = t_arr - t_arr[-1]
         self.line_user.set_data(t_rel, p_arr_midi)
 
-        # target window
+        # target window indices
         dt = (t_target[1] - t_target[0]) if len(t_target) > 1 else 0.01
         t_win_start = max(0.0, now - self.window_seconds)
         i0 = int(t_win_start / dt)
@@ -234,29 +213,27 @@ class GameRenderer:
         i0 = max(0, min(i0, len(t_target) - 1))
         i1 = max(0, min(i1, len(t_target)))
 
+        # target line
         t_t = t_target[i0:i1] - now
-        midi_t_q = self._midi_target_q_full[i0:i1]  # quantized
+        midi_t_q = self._midi_target_q_full[i0:i1]
         self.line_target.set_data(t_t, midi_t_q)
 
-        # scroll background map
+        # background map update (skip empty slice)
         if self.map_im is not None and self._rgba_full is not None:
-            rgba_win = self._rgba_full[:, i0:i1, :]
             if i1 > i0:
+                rgba_win = self._rgba_full[:, i0:i1, :]
                 x0 = self._t_target_full[i0] - now
                 x1 = self._t_target_full[i1 - 1] - now
-            else:
-                x0, x1 = -self.window_seconds, 0
+                self.map_im.set_data(rgba_win)
+                self.map_im.set_extent([x0, x1, self._y_bins_midi[0], self._y_bins_midi[-1]])
 
-            self.map_im.set_data(rgba_win)
-            self.map_im.set_extent([x0, x1, self._y_bins_midi[0], self._y_bins_midi[-1]])
-
-        # scoring in cents (Hz-based)
+        # scoring
         k_now = int(now / dt)
         target_now_hz = hz_target[k_now] if k_now < len(hz_target) else np.nan
         err = cents_error(latest_pitch_hz, target_now_hz)
         self.score_text.set_text(f"Error: {err:+.0f} cents" if np.isfinite(err) else "Error: —")
 
-        # forecast: dot for notes, red band for pauses
+        # forecast
         k_look = int((now + LOOKAHEAD_SECONDS) / dt)
         k_next, midi_next_q = self._next_target_any(k_look, self._midi_target_q_full)
 
@@ -268,7 +245,6 @@ class GameRenderer:
         else:
             if np.isfinite(midi_next_q):
                 self.pause_rect.set_visible(False)
-
                 self.forecast_dot.set_data([0.0], [midi_next_q])
                 self.forecast_dot.set_color("green")
                 self.forecast_dot.set_alpha(0.9)
@@ -289,19 +265,14 @@ class GameRenderer:
             else:
                 self.forecast_dot.set_data([0.0], [np.nan])
                 self.forecast_dot.set_alpha(0.0)
-
                 self.pause_rect.set_visible(True)
-                self.pause_rect.remove()
-                self.pause_rect = self.ax.axvspan(
-                    -self.pause_rect_width, 0,
-                    color="red", alpha=0.18, zorder=1
-                )
-
                 self.forecast_label.set_color("red")
                 self.forecast_label.set_text("Next: pause")
 
         self.ax.set_xlim(-self.window_seconds, 0)
-        self.fig.canvas.draw()
+
+        # flicker-free repaint
+        self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
 
     def still_open(self):

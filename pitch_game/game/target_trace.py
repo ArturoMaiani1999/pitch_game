@@ -1,6 +1,6 @@
 # target_trace.py
 import numpy as np
-from utils_music import midi_to_hz
+from game.utils_music import midi_to_hz
 
 def events_to_target_trace(events, bpm, hop_size, sr):
     """

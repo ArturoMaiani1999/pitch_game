@@ -1,7 +1,7 @@
 # calibration.py
 import time
 import numpy as np
-from config import (
+from game.config import (
     CALIB_SEC_PER_NOTE, CALIB_REPEATS,
     CALIB_PERCENTILE_LOW, CALIB_PERCENTILE_HIGH
 )

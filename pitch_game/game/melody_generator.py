@@ -1,7 +1,7 @@
 # melody_generator.py
 import random
 import math
-from utils_music import hz_to_midi, midi_to_hz
+from pitch_game.game.utils_music import hz_to_midi, midi_to_hz
 
 MODES = {
     "ionian":  [0,2,4,5,7,9,11],

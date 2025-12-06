@@ -2,8 +2,8 @@
 import numpy as np
 import sounddevice as sd
 import math
-from utils_music import midi_to_hz
-from melody_generator import MODES  # reuse the same modes dict
+from game.utils_music import midi_to_hz
+from game.melody_generator import MODES  # reuse the same modes dict
 
 def _sine_note(freq, dur_s, sr=44100, fade_ms=15):
     """Generate a sine tone with a short fade in/out."""

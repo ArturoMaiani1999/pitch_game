@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-from utils_music import hz_to_midi, midi_to_name, cents_error
-from config import (
+from game.utils_music import hz_to_midi, midi_to_name, cents_error
+from game.config import (
     WINDOW_SECONDS, Y_STEP_SEMITONE,
     ALPHA_GREEN, ALPHA_BLUE,
     LOOKAHEAD_SECONDS, DY_SEMITONES

@@ -7,7 +7,7 @@ import queue
 import time
 from collections import deque
 
-from config import SR, HOP_SIZE, WIN_SIZE, PITCH_METHOD, SILENCE_DB, TOLERANCE, CONF_THRESH
+from game.config import SR, HOP_SIZE, WIN_SIZE, PITCH_METHOD, SILENCE_DB, TOLERANCE, CONF_THRESH
 
 class PitchStream:
     def __init__(self):

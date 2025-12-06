@@ -1,1 +1,7 @@
-*.DS_Store
+__pycache__/
+*.pyc
+.DS_Store
+*.wav
+*.mid
+pitch_game/assets/songs/**/backing.wav
+pitch_game/assets/songs/**/target.mid
